@@ -1,0 +1,106 @@
+name: build-for-a7y18lte
+
+on: workflow_dispatch
+
+jobs:
+  build-for-a7y18lte:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Setting up Build Directories
+        run: |
+          mkdir ~/bin
+          mkdir -p ~/android/lineage
+          cd ~/android/lineage
+
+      - name: Installing Dependencies from Apt
+        run: |
+          sudo apt update
+          sudo apt install -y openjdk-8-jdk libwxgtk3.0-gtk3-dev nala bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev git curl
+          
+      - name: Installing "repo" Tool and Git LFS
+        run: |
+          mkdir -p ~/.bin
+          PATH="${HOME}/.bin:${PATH}"
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
+          chmod a+rx ~/.bin/repo
+          sudo apt install -y git-lfs
+          git lfs install
+
+      - name: Authenticating "repo" with GitHub Account
+        run: |
+          git config --global user.email "${{ secrets.GIT_USER_EMAIL }}"
+          git config --global user.name "${{ secrets.GIT_USER_NAME }}"
+
+      - name: Enabling Caching
+        run: |
+          export USE_CCACHE=1
+          export CCACHE_EXEC=/usr/bin/ccache
+          ccache -M 25G
+
+      - name: Initializing Repo with LineageOS Source
+        run: |
+          echo "Initializing Repo with LineageOS source..."
+          cd ~/android/lineage
+          PATH="${HOME}/.bin:${PATH}"
+          repo init --help
+          repo init -u https://github.com/LineageOS/android.git -b lineage-20.0 --depth 1 --git-lfs
+
+      - name: Syncing Repo with Optimizations
+        run: |
+          PATH="${HOME}/.bin:${PATH}"
+          echo "Syncing Repo with optimizations..."
+          cd ~/android/lineage
+          repo sync
+          echo "Repo initialization and sync completed."
+
+      - name: Setting Up Samsung Device Dependencies
+        run: |
+          PATH="${HOME}/.bin:${PATH}"
+          cd ~/android/lineage
+          mkdir -p device/samsung
+          git clone https://github.com/khushtaur3123/android_device_samsung_a7y18lte.git device/samsung/a7y18lte
+          mv device/samsung/a7y18lte/a7y18lte/* device/samsung/a7y18lte/
+          rm -r device/samsung/a7y18lte/a7y18lte
+
+      - name: Setting Up Samsung Vendor Dependencies
+        run: |
+          PATH="${HOME}/.bin:${PATH}"
+          cd ~/android/lineage
+          mkdir -p vendor/samsung
+          git clone https://github.com/khushtaur3123/android_vendor_samsung_a7y18lte.git vendor/samsung/a7y18lte
+          mv vendor/samsung/a7y18lte/a7y18lte/* vendor/samsung/a7y18lte/
+          rm -r vendor/samsung/a7y18lte/a7y18lte
+
+      - name: Setting Up Build Environment
+        run: |
+          PATH="${HOME}/.bin:${PATH}"
+          cd ~/android/lineage
+          source build/envsetup.sh
+          lunch lineage_a7y18lte-userdebug
+
+      - name: Starting Build Process
+        run: |
+          PATH="${HOME}/.bin:${PATH}"
+          cd ~/android/lineage
+          croot && mka bacon
+
+      - name: Get current time
+        uses: srfrnk/current-time@master
+        id: current-time
+        with:
+          format: DD-MM-YYYY
+
+      - name: Uploading Build to Releases
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "Auto Build ${{ steps.current-time.outputs.formattedTime }}"
+          tag_name: v1.0
+          prerelease: false
+          body: |
+            This is an Automatic Release by GitHub Actions.
+          files: |
+            $OUT/recovery.img
+            $OUT/lineage-*-a7y18lte.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
