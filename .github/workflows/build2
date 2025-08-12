@@ -1,4 +1,4 @@
-name: build-for-a7y18lte
+name: build-for-a7y18lte_2
 
 on: workflow_dispatch
 
